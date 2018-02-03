@@ -7,6 +7,7 @@ mod cache_buster {
     use std::fs::File;
     use std::io::Read;
     use std::fmt::Write;
+    use std::result::Result;
 
     fn hex_bytes(sum: &[u8]) -> String {
         let mut s = String::new();
@@ -16,13 +17,7 @@ mod cache_buster {
         s
     }
 
-    fn print_result(sum: &[u8]) {
-        for byte in sum {
-            print!("{:02x}", byte);
-        }
-    }
-
-    pub fn hash_file(file_path: String) {
+    pub fn hash_file(file_path: String) -> Result<String, String> {
         const BUFFER_SIZE: usize = 1024;
         match File::open(file_path) {
             Ok(mut file) => {
@@ -31,18 +26,16 @@ mod cache_buster {
                 loop {
                     let n = match file.read(&mut buffer) {
                         Ok(n) => n,
-                        Err(_) => return,
+                        Err(e) => return Err(e.to_string()),
                     };
                     hasher.input(&buffer[..n]);
                     if n == 0 || n < BUFFER_SIZE {
                         break;
                     }
                 }
-                print!("{}", hex_bytes(&hasher.result()));
+                Ok(hex_bytes(&hasher.result()))
             }
-            Err(e) => {
-                print!("{:?}", e.to_string());
-            }
+            Err(e) => Err(e.to_string()),
         }
     }
 }
