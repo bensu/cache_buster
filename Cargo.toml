@@ -1,0 +1,8 @@
+[package]
+name = "cache_buster"
+version = "0.1.0"
+authors = ["Sebastian Bensusan <sbensu@gmail.com>"]
+
+[dependencies]
+digest = "0.7"
+md-5 = "0.7.0"
