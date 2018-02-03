@@ -43,10 +43,17 @@ mod cache_buster {
 #[cfg(test)]
 mod tests {
     use cache_buster;
+    use std::result::Result;
+
     #[test]
     fn it_works() {
-        println!("{:?}", cache_buster::hash_file("Cargo.toml".to_string()));
-        println!("\n");
-        println!("{:?}", cache_buster::hash_file(".gitignore".to_string()));
+        assert_eq!(
+            Ok("D41D8CD98F0B24E980998ECF8427E".to_string()),
+            cache_buster::hash_file("examples/empty_file.txt".to_string())
+        );
+        assert_eq!(
+            Ok("C0F781B05E475681EAF474CB242F".to_string()),
+            cache_buster::hash_file("examples/fib-5.txt".to_string())
+        );
     }
 }
