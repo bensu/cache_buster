@@ -8,6 +8,7 @@ extern crate serde_json;
 
 mod cache_buster {
 
+    use std::collections::HashMap;
     use serde_json::{Error, Value};
     use serde_json;
     use std::result::Result;
@@ -27,6 +28,8 @@ mod cache_buster {
         }
         s
     }
+
+    type PathDict = HashMap<String, String>;
 
     pub fn hash_file(file_path: &str) -> Result<String, String> {
         const BUFFER_SIZE: usize = 1024;
@@ -50,7 +53,7 @@ mod cache_buster {
         }
     }
 
-    pub fn hash_and_copy(root: &Path, origin_path: &Path) {
+    pub fn hash_and_copy(acc: &mut PathDict, root: &Path, origin_path: &Path) {
         // simplify this copying mess
         let origin_buffer = origin_path.to_path_buf();
         let origin_buffer_1 = origin_buffer.clone();
@@ -84,13 +87,21 @@ mod cache_buster {
                             Err(e) => print!("{:?}", e.to_string()),
                         }
                     }
-                    fs::copy(origin_copy_2, target_path);
+                    if let Some(origin_path_str) = origin_copy_2.to_str() {
+                        if let Some(target_path_str) = target_path.to_str() {
+                            acc.insert(
+                                String::from(origin_path_str.clone()),
+                                String::from(target_path_str.clone()),
+                            );
+                            fs::copy(origin_path_str, target_path_str);
+                        }
+                    }
                 }
             };
         }
     }
 
-    pub fn hash_and_copy_dir(root: &Path, dir: &Path) {
+    pub fn hash_and_copy_dir(acc: &mut PathDict, root: &Path, dir: &Path) {
         match dir.read_dir() {
             Ok(read_dir) => for dir_entry in read_dir {
                 match dir_entry {
@@ -101,9 +112,9 @@ mod cache_buster {
                             let root_buf = root.join(new_parent);
                             let new_root = root_buf.as_path();
                             if path.is_dir() {
-                                hash_and_copy_dir(&new_root, path);
+                                hash_and_copy_dir(acc, &new_root, path);
                             } else {
-                                hash_and_copy(&new_root, path);
+                                hash_and_copy(acc, &new_root, path);
                             }
                         }
                     }
@@ -118,6 +129,7 @@ mod cache_buster {
     struct Config {
         target_path: String,
         patterns: String,
+        dictionary: String,
     }
 
     #[derive(Deserialize, Debug, Clone)]
@@ -139,6 +151,7 @@ mod cache_buster {
     }
 
     pub fn list_dir() {
+        let mut generated_paths = HashMap::new();
         match read_config("examples/config.json") {
             Ok(config) => {
                 let root = Path::new(&config.target_path);
@@ -147,17 +160,24 @@ mod cache_buster {
                         Ok(origin_path) => {
                             if origin_path.is_dir() {
                                 // recur and do whatever you were going to do for a file
-                                hash_and_copy_dir(root, &origin_path);
+                                hash_and_copy_dir(&mut generated_paths, root, &origin_path);
                             } else {
                                 if let Some(new_parent) = origin_path.parent() {
                                     let root_buf = root.join(new_parent);
                                     let new_root = root_buf.as_path();
-                                    hash_and_copy(new_root, &origin_path);
+                                    hash_and_copy(&mut generated_paths, new_root, &origin_path);
                                 }
                             }
                         }
                         Err(e) => println!("{:?}", e),
                     }
+                }
+                // write generated_paths to file
+                match File::create(config.dictionary) {
+                    Ok(mut output_file) => {
+                        serde_json::to_writer(output_file, &generated_paths);
+                    }
+                    _ => (),
                 }
             }
             Err(err) => {

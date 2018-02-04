@@ -1,7 +1,8 @@
 {
   "cache_buster": {
     "target_path": "target",
-    "patterns": "examples/*"
+    "patterns": "examples/*",
+    "dictionary": "target/cached_paths.json"
   },
   "other_unrelated": {
     "fields": "that we don't care about"
