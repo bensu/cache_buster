@@ -2,5 +2,8 @@
   "cache_buster": {
     "target_path": "target",
     "patterns": "examples/*"
+  },
+  "other_unrelated": {
+    "fields": "that we don't care about"
   }
 }
