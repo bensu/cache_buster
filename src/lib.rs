@@ -120,12 +120,17 @@ mod cache_buster {
         patterns: String,
     }
 
+    #[derive(Deserialize, Debug, Clone)]
+    struct ConfigFile {
+        cache_buster: Config,
+    }
+
     fn read_config<P: AsRef<Path>>(path: P) -> Result<Config, String> {
         match File::open(path) {
             Ok(file) => {
-                let v: Result<Config, serde_json::Error> = serde_json::from_reader(file);
+                let v: Result<ConfigFile, serde_json::Error> = serde_json::from_reader(file);
                 match v {
-                    Ok(config) => Ok(config),
+                    Ok(config) => Ok(config.cache_buster),
                     Err(e) => Err(e.to_string()),
                 }
             }

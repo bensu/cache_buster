@@ -1,2 +1,6 @@
-{"target_path": "target",
- "patterns": "examples/*"}
+{
+  "cache_buster": {
+    "target_path": "target",
+    "patterns": "examples/*"
+  }
+}
