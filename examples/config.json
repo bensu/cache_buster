@@ -2,6 +2,7 @@
   "cache_buster": {
     "target_path": "target",
     "patterns": ["examples/*.js", "examples/*.css", "examples/*/*.txt"],
+    "asset_path": "examples",
     "dictionary": "target/cached_paths.json"
   },
   "other_unrelated": {

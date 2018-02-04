@@ -31,6 +31,8 @@ mod cache_buster {
         s
     }
 
+    const DEBUG: bool = false;
+
     type PathDict = HashMap<String, String>;
 
     pub fn hash_file(file_path: &str) -> Result<String, String> {
@@ -55,8 +57,14 @@ mod cache_buster {
         }
     }
 
-    pub fn hash_and_copy(acc: &mut PathDict, root: &Path, origin_path: &Path) {
+    pub fn hash_and_copy(
+        pconfig: &ProcessedConfig,
+        acc: &mut PathDict,
+        root: &Path,
+        origin_path: &Path,
+    ) {
         // simplify this copying mess
+        let asset_path = pconfig.asset_path;
         let origin_buffer = origin_path.to_path_buf();
         let origin_buffer_1 = origin_buffer.clone();
         let origin_copy = origin_buffer_1.as_path();
@@ -89,11 +97,51 @@ mod cache_buster {
                         }
                     }
                     if let Some(origin_path_str) = origin_copy_2.to_str() {
+                        let origin_path_kv = origin_path.clone();
+                        let target_path_kv = target_path.clone();
+                        let mut relative_origin_path_kv = origin_path.clone();
+                        let mut relative_target_path_kv = target_path.clone();
+                        if let Some(asset_path) = asset_path {
+                            if DEBUG {
+                                println!("asset_path");
+                                println!("{:?}", asset_path);
+                            };
+                            match origin_path_kv.strip_prefix(asset_path) {
+                                Ok(relative_origin_path) => {
+                                    relative_origin_path_kv = relative_origin_path;
+                                }
+                                _ => (),
+                            }
+                            match target_path_kv.strip_prefix(pconfig.original_root_path) {
+                                Ok(target_path_kv) => match target_path_kv.strip_prefix(asset_path)
+                                {
+                                    Ok(relative_target_path) => {
+                                        relative_target_path_kv =
+                                            relative_target_path.to_path_buf();
+                                    }
+                                    _ => (),
+                                },
+                                _ => (),
+                            }
+                        }
                         if let Some(target_path_str) = target_path.to_str() {
-                            acc.insert(
-                                String::from(origin_path_str.clone()),
-                                String::from(target_path_str.clone()),
-                            );
+                            if let Some(relative_origin_path_str) = relative_origin_path_kv.to_str()
+                            {
+                                if let Some(relative_target_path_str) =
+                                    relative_target_path_kv.to_str()
+                                {
+                                    if DEBUG {
+                                        println!("origin");
+                                        println!("{}", relative_origin_path_str);
+                                        println!("target");
+                                        println!("{}", relative_target_path_str);
+                                    };
+                                    acc.insert(
+                                        String::from(relative_origin_path_str),
+                                        String::from(relative_target_path_str),
+                                    );
+                                }
+                            }
                             fs::copy(origin_path_str, target_path_str);
                         }
                     }
@@ -102,7 +150,12 @@ mod cache_buster {
         }
     }
 
-    pub fn hash_and_copy_dir(acc: &mut PathDict, root: &Path, dir: &Path) {
+    pub fn hash_and_copy_dir(
+        pconfig: &ProcessedConfig,
+        acc: &mut PathDict,
+        root: &Path,
+        dir: &Path,
+    ) {
         match dir.read_dir() {
             Ok(read_dir) => for dir_entry in read_dir {
                 match dir_entry {
@@ -113,9 +166,9 @@ mod cache_buster {
                             let root_buf = root.join(new_parent);
                             let new_root = root_buf.as_path();
                             if path.is_dir() {
-                                hash_and_copy_dir(acc, &new_root, path);
+                                hash_and_copy_dir(pconfig, acc, &new_root, path);
                             } else {
-                                hash_and_copy(acc, &new_root, path);
+                                hash_and_copy(pconfig, acc, &new_root, path);
                             }
                         }
                     }
@@ -131,6 +184,7 @@ mod cache_buster {
         target_path: String,
         patterns: Vec<String>,
         dictionary: String,
+        asset_path: Option<String>,
     }
 
     #[derive(Deserialize, Debug, Clone)]
@@ -151,23 +205,63 @@ mod cache_buster {
         }
     }
 
+    #[derive(Debug, Clone)]
+    pub struct ProcessedConfig<'a> {
+        target_path: &'a Path,
+        patterns: Vec<String>,
+        dictionary: &'a Path,
+        asset_path: Option<&'a Path>,
+        original_root_path: &'a Path,
+    }
+
+    fn process_config<'a>(config: &'a Config) -> ProcessedConfig<'a> {
+        // why did I have to do it this way?
+        // can't nest the match clause inside of ProcessedConfig { asset_path: ... } because of the borrow checker
+        match config.asset_path {
+            Some(ref asset_path_string) => ProcessedConfig {
+                target_path: Path::new(&config.target_path),
+                patterns: config.patterns.clone(),
+                dictionary: Path::new(&config.dictionary),
+                asset_path: Some(Path::new(asset_path_string)),
+                original_root_path: Path::new(&config.target_path),
+            },
+            None => ProcessedConfig {
+                target_path: Path::new(&config.target_path),
+                patterns: config.patterns.clone(),
+                dictionary: Path::new(&config.dictionary),
+                asset_path: None,
+                original_root_path: Path::new(&config.target_path),
+            },
+        }
+    }
+
     pub fn fingerprint_and_copy(config_path: &str) {
         let mut generated_paths = HashMap::new();
         match read_config(config_path) {
             Ok(config) => {
-                let root = Path::new(&config.target_path);
+                let pconfig = process_config(&config);
                 for pattern in &config.patterns {
                     for entry in glob(pattern).expect("Failed to read glob pattern") {
                         match entry {
                             Ok(origin_path) => {
                                 if origin_path.is_dir() {
                                     // recur and do whatever you were going to do for a file
-                                    hash_and_copy_dir(&mut generated_paths, root, &origin_path);
+                                    hash_and_copy_dir(
+                                        &pconfig,
+                                        &mut generated_paths,
+                                        pconfig.original_root_path,
+                                        &origin_path,
+                                    );
                                 } else {
                                     if let Some(new_parent) = origin_path.parent() {
-                                        let root_buf = root.join(new_parent);
+                                        let root_buf = pconfig.original_root_path.join(new_parent);
                                         let new_root = root_buf.as_path();
-                                        hash_and_copy(&mut generated_paths, new_root, &origin_path);
+                                        hash_and_copy(
+                                            &pconfig,
+                                            &mut generated_paths,
+                                            new_root,
+                                            &origin_path,
+                                        );
                                     }
                                 }
                             }
@@ -176,7 +270,7 @@ mod cache_buster {
                     }
                 }
                 // write generated_paths to file
-                match File::create(config.dictionary) {
+                match File::create(&config.dictionary) {
                     Ok(mut output_file) => {
                         serde_json::to_writer(output_file, &generated_paths);
                     }
