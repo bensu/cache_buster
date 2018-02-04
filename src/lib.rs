@@ -1,9 +1,15 @@
 extern crate digest;
 extern crate glob;
 extern crate md5;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_json;
 
 mod cache_buster {
 
+    use serde_json::{Error, Value};
+    use serde_json;
     use std::result::Result;
     use md5::{Digest, Md5};
     use std::fs::File;
@@ -108,23 +114,49 @@ mod cache_buster {
         }
     }
 
+    #[derive(Deserialize, Debug, Clone)]
+    struct Config {
+        target_path: String,
+        patterns: String,
+    }
+
+    fn read_config<P: AsRef<Path>>(path: P) -> Result<Config, String> {
+        match File::open(path) {
+            Ok(file) => {
+                let v: Result<Config, serde_json::Error> = serde_json::from_reader(file);
+                match v {
+                    Ok(config) => Ok(config),
+                    Err(e) => Err(e.to_string()),
+                }
+            }
+            _ => Err("can't open file".to_string()),
+        }
+    }
+
     pub fn list_dir() {
-        let root = Path::new("target");
-        for entry in glob("examples/*").expect("Failed to read glob pattern") {
-            match entry {
-                Ok(origin_path) => {
-                    if origin_path.is_dir() {
-                        // recur and do whatever you were going to do for a file
-                        hash_and_copy_dir(root, &origin_path);
-                    } else {
-                        if let Some(new_parent) = origin_path.parent() {
-                            let root_buf = root.join(new_parent);
-                            let new_root = root_buf.as_path();
-                            hash_and_copy(new_root, &origin_path);
+        match read_config("examples/config.json") {
+            Ok(config) => {
+                let root = Path::new(&config.target_path);
+                for entry in glob(&config.patterns).expect("Failed to read glob pattern") {
+                    match entry {
+                        Ok(origin_path) => {
+                            if origin_path.is_dir() {
+                                // recur and do whatever you were going to do for a file
+                                hash_and_copy_dir(root, &origin_path);
+                            } else {
+                                if let Some(new_parent) = origin_path.parent() {
+                                    let root_buf = root.join(new_parent);
+                                    let new_root = root_buf.as_path();
+                                    hash_and_copy(new_root, &origin_path);
+                                }
+                            }
                         }
+                        Err(e) => println!("{:?}", e),
                     }
                 }
-                Err(e) => println!("{:?}", e),
+            }
+            Err(err) => {
+                print!("{:?}", err);
             }
         }
     }
