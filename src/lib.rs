@@ -8,6 +8,7 @@ extern crate serde_json;
 
 mod cache_buster {
 
+    use std::vec::Vec;
     use std::collections::HashMap;
     use serde_json::{Error, Value};
     use serde_json;
@@ -128,7 +129,7 @@ mod cache_buster {
     #[derive(Deserialize, Debug, Clone)]
     struct Config {
         target_path: String,
-        patterns: String,
+        patterns: Vec<String>,
         dictionary: String,
     }
 
@@ -155,21 +156,23 @@ mod cache_buster {
         match read_config("examples/config.json") {
             Ok(config) => {
                 let root = Path::new(&config.target_path);
-                for entry in glob(&config.patterns).expect("Failed to read glob pattern") {
-                    match entry {
-                        Ok(origin_path) => {
-                            if origin_path.is_dir() {
-                                // recur and do whatever you were going to do for a file
-                                hash_and_copy_dir(&mut generated_paths, root, &origin_path);
-                            } else {
-                                if let Some(new_parent) = origin_path.parent() {
-                                    let root_buf = root.join(new_parent);
-                                    let new_root = root_buf.as_path();
-                                    hash_and_copy(&mut generated_paths, new_root, &origin_path);
+                for pattern in &config.patterns {
+                    for entry in glob(pattern).expect("Failed to read glob pattern") {
+                        match entry {
+                            Ok(origin_path) => {
+                                if origin_path.is_dir() {
+                                    // recur and do whatever you were going to do for a file
+                                    hash_and_copy_dir(&mut generated_paths, root, &origin_path);
+                                } else {
+                                    if let Some(new_parent) = origin_path.parent() {
+                                        let root_buf = root.join(new_parent);
+                                        let new_root = root_buf.as_path();
+                                        hash_and_copy(&mut generated_paths, new_root, &origin_path);
+                                    }
                                 }
                             }
+                            Err(e) => println!("{:?}", e),
                         }
-                        Err(e) => println!("{:?}", e),
                     }
                 }
                 // write generated_paths to file
@@ -195,11 +198,11 @@ mod tests {
     fn find_md5_hash() {
         assert_eq!(
             Ok("D41D8CD98F0B24E980998ECF8427E".to_string()),
-            cache_buster::hash_file("examples/empty_file.txt")
+            cache_buster::hash_file("examples/empty_file.js")
         );
         assert_eq!(
             Ok("C0F781B05E475681EAF474CB242F".to_string()),
-            cache_buster::hash_file("examples/fib-5.txt")
+            cache_buster::hash_file("examples/full_file.css")
         );
         cache_buster::list_dir();
     }
