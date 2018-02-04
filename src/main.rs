@@ -1,3 +1,4 @@
+extern crate clap;
 extern crate digest;
 extern crate glob;
 extern crate md5;
@@ -82,7 +83,6 @@ mod cache_buster {
                         _ => (),
                     };
                     if let Some(parent) = target_path.parent() {
-                        print!("{:?}", parent);
                         match fs::create_dir_all(parent) {
                             Ok(_) => (),
                             Err(e) => print!("{:?}", e.to_string()),
@@ -151,9 +151,9 @@ mod cache_buster {
         }
     }
 
-    pub fn list_dir() {
+    pub fn fingerprint_and_copy(config_path: &str) {
         let mut generated_paths = HashMap::new();
-        match read_config("examples/config.json") {
+        match read_config(config_path) {
             Ok(config) => {
                 let root = Path::new(&config.target_path);
                 for pattern in &config.patterns {
@@ -190,6 +190,26 @@ mod cache_buster {
     }
 }
 
+use clap::{App, Arg};
+
+fn main() {
+    let matches = App::new("cache_buster")
+        .version("0.1.0")
+        .author("Sebastian Bensusan <sbensu@gmail.com>")
+        .about("Adds content hashing to file names to ensure HTTP protocols cache them")
+        .arg(
+            Arg::with_name("config")
+                .short("c")
+                .required(true)
+                .takes_value(true)
+                .index(1)
+                .help("file that contains the config"),
+        )
+        .get_matches();
+    let config_file = matches.value_of("config").unwrap_or("package.json");
+    cache_buster::fingerprint_and_copy(&config_file);
+}
+
 #[cfg(test)]
 mod tests {
     use cache_buster;
@@ -204,6 +224,5 @@ mod tests {
             Ok("C0F781B05E475681EAF474CB242F".to_string()),
             cache_buster::hash_file("examples/full_file.css")
         );
-        cache_buster::list_dir();
     }
 }
