@@ -74,13 +74,35 @@ From Clojure:
 (require '[clojure.data.json :as json])
 (require '[clojure.java.io :as io])
 (require '[hiccup.core :refer [html]])
+(require '[compojure.core :as compo])
 
+;; read the manifest file
 (def path->fingerprint
   (json/read-str (slurp (io/resource "asset-manifest.json"))))
 
+;; use the fingerprinted file from the html
 (defn js-tags []
   (html
-    [:script {:src (path->fingerprint "js/compiled-output.js")}]))
+   [:script {:src (path->fingerprint "js/compiled-output.js")}]))
+
+;; add Cache-Control max-age=31556926 when the file is fingerprinted, no-cache otherwise
+(defn wrap-cache-control [handler]
+  (let [marker-string ".cached."]
+    (fn [request]
+      (if (.contains (:uri request) marker-string)
+        (some-> (handler request)
+                (assoc-in [:headers "Cache-Control"] "max-age=31556926"))
+        (some-> (handler request)
+                (assoc-in [:headers "Pragma"] "no-cache")
+                (assoc-in [:headers "Cache-Control"] "no-cache, no-store, must-revalidate")
+                (assoc-in [:headers "Expires"] "0"))))))
+
+;; serve all the static files from the asset-path
+(def content-routes
+  (let [asset-path "resources/public"]
+    (wrap-cache-control
+      (compo/routes
+        (route/resources "/" {:root asset-path})))))
 ```
 
 ## Installation
