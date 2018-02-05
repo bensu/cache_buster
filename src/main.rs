@@ -11,7 +11,6 @@ mod cache_buster {
 
     use std::vec::Vec;
     use std::collections::HashMap;
-    use serde_json::{Error, Value};
     use serde_json;
     use std::result::Result;
     use md5::{Digest, Md5};
@@ -19,8 +18,7 @@ mod cache_buster {
     use std::fs;
     use std::io::Read;
     use std::fmt::Write;
-    use std::path::Path;
-    use std::path::PathBuf;
+    use std::path::{Component, Path, PathBuf};
     use glob::glob;
 
     fn hex_bytes(sum: &[u8]) -> String {
@@ -99,29 +97,43 @@ mod cache_buster {
                                 }
                             }
                             if let Some(origin_path_str) = origin_copy_2.to_str() {
-                                let origin_path_kv = path.clone();
-                                let target_path_kv = target_path.clone();
-                                let mut relative_origin_path_kv = path.clone();
+                                let origin_path_kv = path.clone().to_path_buf();
+                                let target_path_kv = target_path.clone().to_path_buf();
+                                let mut relative_origin_path_kv = path.clone().to_path_buf();
                                 let mut relative_target_path_kv = target_path.clone();
                                 if let Some(asset_path) = asset_path {
                                     if DEBUG {
                                         println!("asset_path");
                                         println!("{:?}", asset_path);
                                     };
-                                    match origin_path_kv.strip_prefix(asset_path) {
-                                        Ok(relative_origin_path) => {
-                                            relative_origin_path_kv = relative_origin_path;
-                                        }
-                                        _ => (),
-                                    }
-                                    match target_path_kv.strip_prefix(asset_path) {
-                                        Ok(relative_target_path) => {
-                                            relative_target_path_kv =
-                                                relative_target_path.to_path_buf();
-                                        }
-                                        _ => (),
-                                    }
+                                    relative_origin_path_kv = origin_path_kv
+                                        .strip_prefix(asset_path)
+                                        .unwrap()
+                                        .to_path_buf();
+                                    relative_target_path_kv = target_path_kv
+                                        .strip_prefix(asset_path)
+                                        .unwrap()
+                                        .to_path_buf();
                                 }
+                                if !origin_path_kv.is_absolute() {
+                                    let mut temp_buf = PathBuf::new();
+                                    temp_buf.push(Component::RootDir);
+                                    temp_buf.push(&relative_origin_path_kv);
+                                    let temp_path = temp_buf.clone();
+                                    relative_origin_path_kv = temp_path;
+                                }
+                                if !target_path_kv.is_absolute() {
+                                    let mut temp_buf = PathBuf::new();
+                                    temp_buf.push(Component::RootDir);
+                                    temp_buf.push(&relative_target_path_kv);
+                                    let temp_path = temp_buf.clone();
+                                    relative_target_path_kv = temp_path;
+                                }
+                                // if !origin_path_kv.is_absolute() {
+                                //     origin_temp_buf.push(Component::RootDir);
+                                //     origin_temp_buf.push(relative_origin_path_kv);
+                                //     relative_origin_path_kv = origin_temp_buf.as_path();
+                                // }
                                 if let Some(target_path_str) = target_path.to_str() {
                                     if let Some(relative_origin_path_str) =
                                         relative_origin_path_kv.to_str()
@@ -251,7 +263,7 @@ mod cache_buster {
         }
         // write generated_paths to file
         match File::create(&pconfig.manifest) {
-            Ok(mut output_file) => {
+            Ok(output_file) => {
                 serde_json::to_writer(output_file, &generated_paths);
             }
             _ => (),
@@ -346,7 +358,7 @@ fn main() {
                 let pconfig = cache_buster::process_config(&config);
                 cache_buster::clean_marked_paths(pconfig);
             }
-            Err(err) => (),
+            Err(_) => (),
         }
     };
     if let Some(matches) = matches.subcommand_matches("fingerprint") {
@@ -356,7 +368,7 @@ fn main() {
                 let pconfig = cache_buster::process_config(&config);
                 cache_buster::fingerprint_and_copy(pconfig);
             }
-            Err(err) => (),
+            Err(_) => (),
         }
     };
 }
