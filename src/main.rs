@@ -174,7 +174,7 @@ mod cache_buster {
     }
 
     #[derive(Deserialize, Debug, Clone)]
-    struct Config {
+    pub struct Config {
         patterns: Vec<String>,
         dictionary: String,
         asset_path: Option<String>,
@@ -186,7 +186,7 @@ mod cache_buster {
         cache_buster: Config,
     }
 
-    fn read_config<P: AsRef<Path>>(path: P) -> Result<Config, String> {
+    pub fn read_config<P: AsRef<Path>>(path: P) -> Result<Config, String> {
         match File::open(path) {
             Ok(file) => {
                 let v: Result<ConfigFile, serde_json::Error> = serde_json::from_reader(file);
@@ -209,7 +209,7 @@ mod cache_buster {
 
     const DEFAULT_MARKER: &str = "cached";
 
-    fn process_config<'a>(config: &'a Config) -> ProcessedConfig<'a> {
+    pub fn process_config<'a>(config: &'a Config) -> ProcessedConfig<'a> {
         // why did I have to do it this way?
         // can't nest the match clause inside of ProcessedConfig { asset_path: ... } because of the borrow checker
         match config.asset_path {
@@ -234,59 +234,133 @@ mod cache_buster {
         }
     }
 
-    pub fn fingerprint_and_copy(config_path: &str) {
+    pub fn fingerprint_and_copy(pconfig: ProcessedConfig) {
         let mut generated_paths = HashMap::new();
-        match read_config(config_path) {
-            Ok(config) => {
-                let pconfig = process_config(&config);
-                for pattern in &config.patterns {
-                    for entry in glob(pattern).expect("Failed to read glob pattern") {
-                        match entry {
-                            Ok(origin_path) => {
-                                if origin_path.is_dir() {
-                                    // recur and do whatever you were going to do for a file
-                                    hash_and_copy_dir(&pconfig, &mut generated_paths, &origin_path);
-                                } else {
-                                    hash_and_copy(&pconfig, &mut generated_paths, &origin_path);
-                                }
-                            }
-                            Err(e) => println!("{:?}", e),
+        for pattern in &pconfig.patterns {
+            for entry in glob(pattern).expect("Failed to read glob pattern") {
+                match entry {
+                    Ok(origin_path) => {
+                        if origin_path.is_dir() {
+                            // recur and do whatever you were going to do for a file
+                            hash_and_copy_dir(&pconfig, &mut generated_paths, &origin_path);
+                        } else {
+                            hash_and_copy(&pconfig, &mut generated_paths, &origin_path);
                         }
                     }
+                    Err(e) => println!("{:?}", e),
                 }
-                // write generated_paths to file
-                match File::create(&config.dictionary) {
-                    Ok(mut output_file) => {
-                        serde_json::to_writer(output_file, &generated_paths);
+            }
+        }
+        // write generated_paths to file
+        match File::create(&pconfig.dictionary) {
+            Ok(mut output_file) => {
+                serde_json::to_writer(output_file, &generated_paths);
+            }
+            _ => (),
+        }
+    }
+
+    fn clean_dir(pconfig: &ProcessedConfig, dir: &Path) {
+        match dir.read_dir() {
+            Ok(read_dir) => for dir_entry in read_dir {
+                match dir_entry {
+                    Ok(dir_entry) => {
+                        let path = dir_entry.path();
+                        if path.is_dir() {
+                            // recur and do whatever you were going to do for a file
+                            clean_dir(&pconfig, &path)
+                        } else {
+                            if let Some(file_name) = path.file_stem() {
+                                let file_name = file_name.to_str().unwrap();
+                                if file_name.contains(&pconfig.marker) {
+                                    fs::remove_file(&path);
+                                }
+                            }
+                        }
                     }
                     _ => (),
                 }
-            }
-            Err(err) => {
-                print!("{:?}", err);
+            },
+            _ => (),
+        }
+    }
+
+    pub fn clean_marked_paths(pconfig: ProcessedConfig) {
+        for pattern in &pconfig.patterns {
+            for entry in glob(pattern).expect("Failed to read glob pattern") {
+                match entry {
+                    Ok(origin_path) => {
+                        if origin_path.is_dir() {
+                            // recur and do whatever you were going to do for a file
+                            clean_dir(&pconfig, &origin_path)
+                        } else {
+                            if let Some(file_name) = origin_path.file_stem() {
+                                let file_name = file_name.to_str().unwrap();
+                                if file_name.contains(&pconfig.marker) {
+                                    fs::remove_file(&origin_path);
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => println!("{:?}", e),
+                }
             }
         }
     }
 }
 
-use clap::{App, Arg};
+use clap::{App, Arg, SubCommand};
 
 fn main() {
     let matches = App::new("cache_buster")
         .version("0.1.0")
         .author("Sebastian Bensusan <sbensu@gmail.com>")
         .about("Adds content hashing to file names to ensure HTTP protocols cache them")
-        .arg(
-            Arg::with_name("config")
-                .short("c")
-                .required(true)
-                .takes_value(true)
-                .index(1)
-                .help("file that contains the config"),
+        .subcommand(
+            SubCommand::with_name("fingerprint")
+                .about("removes all the files that match the marker string .{marker}.")
+                .arg(
+                    Arg::with_name("config")
+                        .short("c")
+                        .required(true)
+                        .takes_value(true)
+                        .index(1)
+                        .help("file that contains the config"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("clean")
+                .about("removes all the files that match the marker string .{marker}.")
+                .arg(
+                    Arg::with_name("config")
+                        .short("c")
+                        .required(true)
+                        .takes_value(true)
+                        .index(1)
+                        .help("file that contains the config"),
+                ),
         )
         .get_matches();
-    let config_file = matches.value_of("config").unwrap_or("package.json");
-    cache_buster::fingerprint_and_copy(&config_file);
+    if let Some(matches) = matches.subcommand_matches("clean") {
+        let config_file = matches.value_of("config").unwrap_or("package.json");
+        match cache_buster::read_config(config_file) {
+            Ok(config) => {
+                let pconfig = cache_buster::process_config(&config);
+                cache_buster::clean_marked_paths(pconfig);
+            }
+            Err(err) => (),
+        }
+    };
+    if let Some(matches) = matches.subcommand_matches("fingerprint") {
+        let config_file = matches.value_of("config").unwrap_or("package.json");
+        match cache_buster::read_config(config_file) {
+            Ok(config) => {
+                let pconfig = cache_buster::process_config(&config);
+                cache_buster::fingerprint_and_copy(pconfig);
+            }
+            Err(err) => (),
+        }
+    };
 }
 
 #[cfg(test)]
