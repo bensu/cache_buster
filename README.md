@@ -25,7 +25,7 @@ The build step is when you prepare your application for production or use. It is
 
 Make a configuration file with the following options:
 
-```
+```js
 {
   // all the options should be under the "cache_buster" key
   "cache_buster": {
@@ -49,13 +49,13 @@ Since the options need to be under the `"cache_buster"` key, you can embed them 
 
 Add all the fingerprinted copies using the configuration file:
 
-```
+```sh
 cache_buster fingerprint package.json
 ```
 
 Remove all the fingerprinted files with `clean`:
 
-```
+```sh
 cache_buster clean package.json
 ```
 
@@ -65,7 +65,7 @@ You don't need `cache_buster` at runtime, only the files it created. I'm adding 
 
 The code that runs your web server and creates your HTML pages now needs to know the names of the fingerprinted files. That is why `cache_buster` makes a _manifest file_. The JSON manifest file maps the original file names to the fingerprinted ones:
 
-```
+```js
 // asset_mainifest.json
 {
  "css/main_file.css": "css/main.C0F781B05E475681EAF474CB242F.cached.css",
