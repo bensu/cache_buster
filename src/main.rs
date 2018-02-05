@@ -205,7 +205,7 @@ mod cache_buster {
                     Err(e) => Err(e.to_string()),
                 }
             }
-            _ => Err("can't open file".to_string()),
+            _ => Err("can't config open file".to_string()),
         }
     }
 
