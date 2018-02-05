@@ -368,7 +368,7 @@ fn main() {
                 let pconfig = cache_buster::process_config(&config);
                 cache_buster::fingerprint_and_copy(pconfig);
             }
-            Err(_) => (),
+            Err(e) => println!("{:?}", e.to_string()),
         }
     };
 }
