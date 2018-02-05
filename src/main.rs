@@ -57,15 +57,10 @@ mod cache_buster {
         }
     }
 
-    pub fn hash_and_copy(
-        pconfig: &ProcessedConfig,
-        acc: &mut PathDict,
-        root: &Path,
-        origin_path: &Path,
-    ) {
+    pub fn hash_and_copy(pconfig: &ProcessedConfig, acc: &mut PathDict, path: &Path) {
         // simplify this copying mess
         let asset_path = pconfig.asset_path;
-        let origin_buffer = origin_path.to_path_buf();
+        let origin_buffer = path.to_path_buf();
         let origin_buffer_1 = origin_buffer.clone();
         let origin_copy = origin_buffer_1.as_path();
         let origin_buffer_2 = origin_buffer.clone();
@@ -75,7 +70,9 @@ mod cache_buster {
                 if let Some(file_name) = file_name.to_str() {
                     let mut file_name = file_name.to_string();
                     let mut target_path = PathBuf::new();
-                    target_path.push(&root);
+                    if let Some(parent) = path.parent() {
+                        target_path.push(parent);
+                    }
                     match hash_file(path_str) {
                         Ok(hash) => {
                             file_name.push_str(".");
@@ -97,9 +94,9 @@ mod cache_buster {
                         }
                     }
                     if let Some(origin_path_str) = origin_copy_2.to_str() {
-                        let origin_path_kv = origin_path.clone();
+                        let origin_path_kv = path.clone();
                         let target_path_kv = target_path.clone();
-                        let mut relative_origin_path_kv = origin_path.clone();
+                        let mut relative_origin_path_kv = path.clone();
                         let mut relative_target_path_kv = target_path.clone();
                         if let Some(asset_path) = asset_path {
                             if DEBUG {
@@ -112,15 +109,10 @@ mod cache_buster {
                                 }
                                 _ => (),
                             }
-                            match target_path_kv.strip_prefix(pconfig.original_root_path) {
-                                Ok(target_path_kv) => match target_path_kv.strip_prefix(asset_path)
-                                {
-                                    Ok(relative_target_path) => {
-                                        relative_target_path_kv =
-                                            relative_target_path.to_path_buf();
-                                    }
-                                    _ => (),
-                                },
+                            match target_path_kv.strip_prefix(asset_path) {
+                                Ok(relative_target_path) => {
+                                    relative_target_path_kv = relative_target_path.to_path_buf();
+                                }
                                 _ => (),
                             }
                         }
@@ -150,26 +142,17 @@ mod cache_buster {
         }
     }
 
-    pub fn hash_and_copy_dir(
-        pconfig: &ProcessedConfig,
-        acc: &mut PathDict,
-        root: &Path,
-        dir: &Path,
-    ) {
+    pub fn hash_and_copy_dir(pconfig: &ProcessedConfig, acc: &mut PathDict, dir: &Path) {
         match dir.read_dir() {
             Ok(read_dir) => for dir_entry in read_dir {
                 match dir_entry {
                     Ok(dir_entry) => {
                         let path_buf = dir_entry.path();
                         let path = path_buf.as_path();
-                        if let Some(new_parent) = path.parent() {
-                            let root_buf = root.join(new_parent);
-                            let new_root = root_buf.as_path();
-                            if path.is_dir() {
-                                hash_and_copy_dir(pconfig, acc, &new_root, path);
-                            } else {
-                                hash_and_copy(pconfig, acc, &new_root, path);
-                            }
+                        if path.is_dir() {
+                            hash_and_copy_dir(pconfig, acc, path);
+                        } else {
+                            hash_and_copy(pconfig, acc, path);
                         }
                     }
                     _ => (),
@@ -181,7 +164,6 @@ mod cache_buster {
 
     #[derive(Deserialize, Debug, Clone)]
     struct Config {
-        target_path: String,
         patterns: Vec<String>,
         dictionary: String,
         asset_path: Option<String>,
@@ -207,11 +189,9 @@ mod cache_buster {
 
     #[derive(Debug, Clone)]
     pub struct ProcessedConfig<'a> {
-        target_path: &'a Path,
         patterns: Vec<String>,
         dictionary: &'a Path,
         asset_path: Option<&'a Path>,
-        original_root_path: &'a Path,
     }
 
     fn process_config<'a>(config: &'a Config) -> ProcessedConfig<'a> {
@@ -219,18 +199,14 @@ mod cache_buster {
         // can't nest the match clause inside of ProcessedConfig { asset_path: ... } because of the borrow checker
         match config.asset_path {
             Some(ref asset_path_string) => ProcessedConfig {
-                target_path: Path::new(&config.target_path),
                 patterns: config.patterns.clone(),
                 dictionary: Path::new(&config.dictionary),
                 asset_path: Some(Path::new(asset_path_string)),
-                original_root_path: Path::new(&config.target_path),
             },
             None => ProcessedConfig {
-                target_path: Path::new(&config.target_path),
                 patterns: config.patterns.clone(),
                 dictionary: Path::new(&config.dictionary),
                 asset_path: None,
-                original_root_path: Path::new(&config.target_path),
             },
         }
     }
@@ -246,23 +222,9 @@ mod cache_buster {
                             Ok(origin_path) => {
                                 if origin_path.is_dir() {
                                     // recur and do whatever you were going to do for a file
-                                    hash_and_copy_dir(
-                                        &pconfig,
-                                        &mut generated_paths,
-                                        pconfig.original_root_path,
-                                        &origin_path,
-                                    );
+                                    hash_and_copy_dir(&pconfig, &mut generated_paths, &origin_path);
                                 } else {
-                                    if let Some(new_parent) = origin_path.parent() {
-                                        let root_buf = pconfig.original_root_path.join(new_parent);
-                                        let new_root = root_buf.as_path();
-                                        hash_and_copy(
-                                            &pconfig,
-                                            &mut generated_paths,
-                                            new_root,
-                                            &origin_path,
-                                        );
-                                    }
+                                    hash_and_copy(&pconfig, &mut generated_paths, &origin_path);
                                 }
                             }
                             Err(e) => println!("{:?}", e),
