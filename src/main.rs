@@ -83,10 +83,8 @@ mod cache_buster {
                                     if let Some(extension) = origin_copy.extension() {
                                         if let Some(extension) = extension.to_str() {
                                             file_name.push_str(".");
-                                            if let Some(marker) = Some("cached") {
-                                                file_name.push_str(marker);
-                                                file_name.push_str(".");
-                                            }
+                                            file_name.push_str(&pconfig.marker);
+                                            file_name.push_str(".");
                                             file_name.push_str(extension);
                                         }
                                     }
