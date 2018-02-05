@@ -266,7 +266,7 @@ mod cache_buster {
             Ok(output_file) => {
                 serde_json::to_writer(output_file, &generated_paths);
             }
-            _ => (),
+            Err(e) => println!("{:?}", e.to_string()),
         }
     }
 
@@ -288,10 +288,10 @@ mod cache_buster {
                             }
                         }
                     }
-                    _ => (),
+                    Err(e) => println!("{:?}", e.to_string()),
                 }
             },
-            _ => (),
+            Err(e) => println!("{:?}", e.to_string()),
         }
     }
 
@@ -358,7 +358,7 @@ fn main() {
                 let pconfig = cache_buster::process_config(&config);
                 cache_buster::clean_marked_paths(pconfig);
             }
-            Err(_) => (),
+            Err(e) => println!("{:?}", e.to_string()),
         }
     };
     if let Some(matches) = matches.subcommand_matches("fingerprint") {
