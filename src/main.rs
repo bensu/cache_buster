@@ -174,7 +174,7 @@ mod cache_buster {
     #[derive(Deserialize, Debug, Clone)]
     pub struct Config {
         patterns: Vec<String>,
-        dictionary: String,
+        manifest: String,
         asset_path: Option<String>,
         marker: Option<String>,
     }
@@ -200,7 +200,7 @@ mod cache_buster {
     #[derive(Debug, Clone)]
     pub struct ProcessedConfig<'a> {
         patterns: Vec<String>,
-        dictionary: &'a Path,
+        manifest: &'a Path,
         asset_path: Option<&'a Path>,
         marker: String,
     }
@@ -213,7 +213,7 @@ mod cache_buster {
         match config.asset_path {
             Some(ref asset_path_string) => ProcessedConfig {
                 patterns: config.patterns.clone(),
-                dictionary: Path::new(&config.dictionary),
+                manifest: Path::new(&config.manifest),
                 asset_path: Some(Path::new(asset_path_string)),
                 marker: config
                     .marker
@@ -222,7 +222,7 @@ mod cache_buster {
             },
             None => ProcessedConfig {
                 patterns: config.patterns.clone(),
-                dictionary: Path::new(&config.dictionary),
+                manifest: Path::new(&config.manifest),
                 asset_path: None,
                 marker: config
                     .marker
@@ -250,7 +250,7 @@ mod cache_buster {
             }
         }
         // write generated_paths to file
-        match File::create(&pconfig.dictionary) {
+        match File::create(&pconfig.manifest) {
             Ok(mut output_file) => {
                 serde_json::to_writer(output_file, &generated_paths);
             }

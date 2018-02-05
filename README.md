@@ -40,7 +40,7 @@ Make a configuration file with the following options:
     "marker": "cached",
 
     // the path where cache_buster will put the mapping from file -> fingerprinted_copy
-    "dictionary": "resources/asset-manifest.json"
+    "manifest": "resources/asset-manifest.json"
   }
 }
 ```
