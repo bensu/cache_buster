@@ -4,7 +4,7 @@
     "patterns": ["examples/*.js", "examples/*.css", "examples/*/*.txt"],
     "asset_path": "examples",
     "marker": "something",
-    "dictionary": "target/cached_paths.json"
+    "manifest": "target/cached_paths.json"
   },
   "other_unrelated": {
     "fields": "that we don't care about"
