@@ -74,11 +74,11 @@ The code that runs your web server and creates your HTML pages now needs to know
 }
 ```
 
-From Rust:
+#### From Rust:
 
 TODO
 
-From Clojure:
+#### From Clojure:
 
 ```clj
 (require '[clojure.data.json :as json])
