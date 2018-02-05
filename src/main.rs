@@ -58,87 +58,98 @@ mod cache_buster {
     }
 
     pub fn hash_and_copy(pconfig: &ProcessedConfig, acc: &mut PathDict, path: &Path) {
-        // simplify this copying mess
-        let asset_path = pconfig.asset_path;
-        let origin_buffer = path.to_path_buf();
-        let origin_buffer_1 = origin_buffer.clone();
-        let origin_copy = origin_buffer_1.as_path();
-        let origin_buffer_2 = origin_buffer.clone();
-        let origin_copy_2 = origin_buffer_2.as_path();
-        if let Some(path_str) = origin_buffer.to_str() {
-            if let Some(file_name) = origin_copy.file_stem() {
-                if let Some(file_name) = file_name.to_str() {
-                    let mut file_name = file_name.to_string();
-                    let mut target_path = PathBuf::new();
-                    if let Some(parent) = path.parent() {
-                        target_path.push(parent);
-                    }
-                    match hash_file(path_str) {
-                        Ok(hash) => {
-                            file_name.push_str(".");
-                            file_name.push_str(&hash);
-                            if let Some(extension) = origin_copy.extension() {
-                                if let Some(extension) = extension.to_str() {
+        if let Some(file_name) = path.file_stem() {
+            let file_name_str = file_name.to_str().unwrap();
+            if !file_name_str.contains(&pconfig.marker) {
+                // simplify this copying mess
+                let asset_path = pconfig.asset_path;
+                let origin_buffer = path.to_path_buf();
+                let origin_buffer_1 = origin_buffer.clone();
+                let origin_copy = origin_buffer_1.as_path();
+                let origin_buffer_2 = origin_buffer.clone();
+                let origin_copy_2 = origin_buffer_2.as_path();
+                if let Some(path_str) = origin_buffer.to_str() {
+                    if let Some(file_name) = origin_copy.file_stem() {
+                        if let Some(file_name) = file_name.to_str() {
+                            let mut file_name = file_name.to_string();
+                            let mut target_path = PathBuf::new();
+                            if let Some(parent) = path.parent() {
+                                target_path.push(parent);
+                            }
+                            match hash_file(path_str) {
+                                Ok(hash) => {
                                     file_name.push_str(".");
-                                    file_name.push_str(extension);
+                                    file_name.push_str(&hash);
+                                    if let Some(extension) = origin_copy.extension() {
+                                        if let Some(extension) = extension.to_str() {
+                                            file_name.push_str(".");
+                                            if let Some(marker) = Some("cached") {
+                                                file_name.push_str(marker);
+                                                file_name.push_str(".");
+                                            }
+                                            file_name.push_str(extension);
+                                        }
+                                    }
+                                    target_path.push(file_name);
                                 }
-                            }
-                            target_path.push(file_name);
-                        }
-                        _ => (),
-                    };
-                    if let Some(parent) = target_path.parent() {
-                        match fs::create_dir_all(parent) {
-                            Ok(_) => (),
-                            Err(e) => print!("{:?}", e.to_string()),
-                        }
-                    }
-                    if let Some(origin_path_str) = origin_copy_2.to_str() {
-                        let origin_path_kv = path.clone();
-                        let target_path_kv = target_path.clone();
-                        let mut relative_origin_path_kv = path.clone();
-                        let mut relative_target_path_kv = target_path.clone();
-                        if let Some(asset_path) = asset_path {
-                            if DEBUG {
-                                println!("asset_path");
-                                println!("{:?}", asset_path);
+                                _ => (),
                             };
-                            match origin_path_kv.strip_prefix(asset_path) {
-                                Ok(relative_origin_path) => {
-                                    relative_origin_path_kv = relative_origin_path;
+                            if let Some(parent) = target_path.parent() {
+                                match fs::create_dir_all(parent) {
+                                    Ok(_) => (),
+                                    Err(e) => print!("{:?}", e.to_string()),
                                 }
-                                _ => (),
                             }
-                            match target_path_kv.strip_prefix(asset_path) {
-                                Ok(relative_target_path) => {
-                                    relative_target_path_kv = relative_target_path.to_path_buf();
-                                }
-                                _ => (),
-                            }
-                        }
-                        if let Some(target_path_str) = target_path.to_str() {
-                            if let Some(relative_origin_path_str) = relative_origin_path_kv.to_str()
-                            {
-                                if let Some(relative_target_path_str) =
-                                    relative_target_path_kv.to_str()
-                                {
+                            if let Some(origin_path_str) = origin_copy_2.to_str() {
+                                let origin_path_kv = path.clone();
+                                let target_path_kv = target_path.clone();
+                                let mut relative_origin_path_kv = path.clone();
+                                let mut relative_target_path_kv = target_path.clone();
+                                if let Some(asset_path) = asset_path {
                                     if DEBUG {
-                                        println!("origin");
-                                        println!("{}", relative_origin_path_str);
-                                        println!("target");
-                                        println!("{}", relative_target_path_str);
+                                        println!("asset_path");
+                                        println!("{:?}", asset_path);
                                     };
-                                    acc.insert(
-                                        String::from(relative_origin_path_str),
-                                        String::from(relative_target_path_str),
-                                    );
+                                    match origin_path_kv.strip_prefix(asset_path) {
+                                        Ok(relative_origin_path) => {
+                                            relative_origin_path_kv = relative_origin_path;
+                                        }
+                                        _ => (),
+                                    }
+                                    match target_path_kv.strip_prefix(asset_path) {
+                                        Ok(relative_target_path) => {
+                                            relative_target_path_kv =
+                                                relative_target_path.to_path_buf();
+                                        }
+                                        _ => (),
+                                    }
+                                }
+                                if let Some(target_path_str) = target_path.to_str() {
+                                    if let Some(relative_origin_path_str) =
+                                        relative_origin_path_kv.to_str()
+                                    {
+                                        if let Some(relative_target_path_str) =
+                                            relative_target_path_kv.to_str()
+                                        {
+                                            if DEBUG {
+                                                println!("origin");
+                                                println!("{}", relative_origin_path_str);
+                                                println!("target");
+                                                println!("{}", relative_target_path_str);
+                                            };
+                                            acc.insert(
+                                                String::from(relative_origin_path_str),
+                                                String::from(relative_target_path_str),
+                                            );
+                                        }
+                                    }
+                                    fs::copy(origin_path_str, target_path_str);
                                 }
                             }
-                            fs::copy(origin_path_str, target_path_str);
                         }
-                    }
+                    };
                 }
-            };
+            }
         }
     }
 
@@ -167,6 +178,7 @@ mod cache_buster {
         patterns: Vec<String>,
         dictionary: String,
         asset_path: Option<String>,
+        marker: Option<String>,
     }
 
     #[derive(Deserialize, Debug, Clone)]
@@ -192,7 +204,10 @@ mod cache_buster {
         patterns: Vec<String>,
         dictionary: &'a Path,
         asset_path: Option<&'a Path>,
+        marker: String,
     }
+
+    const DEFAULT_MARKER: &str = "cached";
 
     fn process_config<'a>(config: &'a Config) -> ProcessedConfig<'a> {
         // why did I have to do it this way?
@@ -202,11 +217,19 @@ mod cache_buster {
                 patterns: config.patterns.clone(),
                 dictionary: Path::new(&config.dictionary),
                 asset_path: Some(Path::new(asset_path_string)),
+                marker: config
+                    .marker
+                    .clone()
+                    .unwrap_or(String::from(DEFAULT_MARKER)),
             },
             None => ProcessedConfig {
                 patterns: config.patterns.clone(),
                 dictionary: Path::new(&config.dictionary),
                 asset_path: None,
+                marker: config
+                    .marker
+                    .clone()
+                    .unwrap_or(String::from(DEFAULT_MARKER)),
             },
         }
     }
