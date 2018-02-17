@@ -357,8 +357,12 @@ fn main() {
             Ok(config) => {
                 let pconfig = cache_buster::process_config(&config);
                 cache_buster::clean_marked_paths(pconfig);
+                ::std::process::exit(0);
             }
-            Err(e) => println!("{:?}", e.to_string()),
+            Err(e) => {
+                println!("{:?}", e.to_string());
+                ::std::process::exit(1);
+            }
         }
     };
     if let Some(matches) = matches.subcommand_matches("fingerprint") {
@@ -367,8 +371,12 @@ fn main() {
             Ok(config) => {
                 let pconfig = cache_buster::process_config(&config);
                 cache_buster::fingerprint_and_copy(pconfig);
+                ::std::process::exit(0);
             }
-            Err(e) => println!("{:?}", e.to_string()),
+            Err(e) => {
+                println!("{:?}", e.to_string());
+                ::std::process::exit(1);
+            }
         }
     };
 }
